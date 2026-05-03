@@ -1,50 +1,46 @@
-#ifndef ARENA_H
-#define ARENA_H
+#pragma once
 
 #include <vector>
 #include <string>
 #include "RobotBase.h"
 #include "RadarObj.h"
 
-struct RobotState {
-    RobotBase* robot;
-
-    int row;
-    int col;
-
-    int health;
-    bool alive;
-
-    std::string name;
-};
-
 class Arena {
+public:
+    Arena(int r, int c);
+
+    // robot management
+    void addRobot(RobotBase* robot, const std::string& name);
+
+    // main loop
+    void run();
+
 private:
+    struct RobotState {
+        RobotBase* robot;
+        int row;
+        int col;
+        int health;
+        bool alive;
+        std::string name;
+    };
+
     int rows;
     int cols;
 
     std::vector<RobotState> robots;
 
-public:
-    Arena(int r, int c);
+    // 2D board representation (you are using this in cpp)
+    std::vector<std::vector<char>> board;
 
-    void addRobot(RobotBase* robot, const std::string& name);
-    void run();
-
-private:
+    // core simulation steps
     void processTurn(RobotState& r);
-
-    // Phases
-    std::vector<RadarObj> performRadar(RobotState& r, int direction);
+    void handleMove(RobotState& r, int dir, int dist);
     void handleShoot(RobotState& shooter, int target_row, int target_col);
-    void handleMove(RobotState& r, int direction, int distance);
+    std::vector<RadarObj> performRadar(RobotState& r, int direction);
 
-    // Helpers
-    bool inBounds(int row, int col);
-    RobotState* getRobotAt(int row, int col);
-
-    bool checkWinCondition();
+    // helpers
+    bool inBounds(int r, int c) const;
+    RobotState* getRobotAt(int r, int c);
     void printState();
 };
-
-#endif

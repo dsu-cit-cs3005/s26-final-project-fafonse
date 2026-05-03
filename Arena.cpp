@@ -30,15 +30,12 @@ void Arena::addRobot(RobotBase* robot, const std::string& name) {
     );
 
     // 🧠 Initialize robot with arena info
-    rbt.robot->set_board_size(rows, cols);
+    rbt.robot->set_boundaries(rows, cols);
     rbt.robot->move_to(rbt.row, rbt.col);
-    rbt.robot->get_current_location(rbt.col)
 
-    // 💡 (OPTIONAL but smart for grading)
-    // If RobotBase exposes these, track them:
-    // rbt.armor = robot->get_armor();
-    // rbt.move_speed = robot->get_move_speed();
-    // rbt.weapon = robot->get_weapon_type();
+    rbt.armor = robot->get_armor();
+    rbt.move_speed = robot->get_move_speed();
+    rbt.weapon = robot->get_weapon_type();
 
     robots.push_back(rbt);
 
@@ -157,10 +154,7 @@ void Arena::handleShoot(RobotState& shooter, int target_row, int target_col) {
 
         std::cout << shooter.name << " hit " << target.name << "\n";
 
-        if (target.robot->get_health() <= 0) {
-            target.alive = false;
-            std::cout << target.name << " destroyed!\n";
-        }
+        target.alive = (target.robot->get_health() > 0);
     };
 
     // =========================
@@ -252,7 +246,7 @@ void Arena::handleMove(RobotState& r, int dir, int dist) {
 
     // 🚨 Pit effect: cannot move
     if (board[r.row][r.col] == 'P') {
-        r.robot->disable_movement();
+        r.robot->disable_movement(); // set move speed to 0
         return;
     }
 
@@ -304,12 +298,6 @@ std::vector<RadarObj> Arena::performRadar(RobotState& r, int direction) {
 
     // scan outward in selected direction
     while (inBounds(row, col)) {
-
-        // 🚫 Mounds block radar vision
-        if (board[row][col] == 'M') {
-            break;
-        }
-
         RobotState* other = getRobotAt(row, col);
 
         if (other && other->alive) {
