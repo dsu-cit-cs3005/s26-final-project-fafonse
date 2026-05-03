@@ -1,8 +1,14 @@
 #include "Arena.h"
+#include "RadarObj.h"
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
 
-Arena::Arena(int r, int c) : rows(r), cols(c) {}
+Arena::Arena(int r, int c)
+    : rows(r), cols(c),
+      board(rows, std::vector<char>(cols, '.')) // fill with '.'
+{}
 
 void Arena::addRobot(RobotBase *robot, const std::string &name) {
   RobotState rbt;
@@ -152,7 +158,8 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
       return;
 
     int totalDamage = static_cast<int>(
-        baseDamage - (target.robot->get_armor() * 0.1f)); // apply armor * 0.1
+        baseDamage *
+        (1.0f - (target.robot->get_armor() * 0.1f))); // apply armor * 0.1
 
     target.robot->take_damage(totalDamage);
     target.robot->reduce_armor(1);
@@ -172,7 +179,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
     if (dr <= 1 && dc <= 1) {
       RobotState *target = getRobotAt(target_row, target_col);
       if (target) {
-        applyHit(*target, 30);
+        applyHit(*target, rand() % 11 + 50); // 50 - 60 dmg
       }
     }
   }
@@ -192,7 +199,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
     while (inBounds(r, c)) {
       RobotState *target = getRobotAt(r, c);
       if (target) {
-        applyHit(*target, 25);
+        applyHit(*target, rand() % 11 + 20); // 10 - 20 damage
       }
       r += dr;
       c += dc;
@@ -218,7 +225,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
 
         RobotState *target = getRobotAt(r, c);
         if (target) {
-          applyHit(*target, 20);
+          applyHit(*target, rand() % 21 + 30); // 30 - 50 damage
         }
       }
     }
@@ -243,7 +250,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
 
         RobotState *target = getRobotAt(r, c);
         if (target) {
-          applyHit(*target, 35);
+          applyHit(*target, rand() % 31 + 10); // 10 - 40 damage
         }
       }
     }
@@ -308,29 +315,116 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
 std::vector<RadarObj> Arena::performRadar(RobotState &r, int direction) {
   std::vector<RadarObj> results;
 
-  int dr = directions[direction].first;
-  int dc = directions[direction].second;
+  if (direction == 0) { // nearby scan
+    for (int dr = -1; dr <= 1; dr++) {
+      for (int dc = -1; dc <= 1; dc++) {
+        if (dr == 0 && dc == 0) // skip self
+          continue;
 
-  int row = r.row + dr;
+        int rr = r.row + dr;
+        int cc = r.col + dc;
+
+        if (!inBounds(rr, cc))
+          continue;
+
+        // detect object same as above
+        char cell = board[rr][cc];
+
+        if (cell == '.') { // skip object init if nothing there
+          continue;
+        }
+
+        RadarObj obj = RadarObj(cell, rr, cc);
+        results.push_back(obj);
+
+        if (cell == 'M') { // return radar early if a mound
+          return results;
+        }
+      }
+    }
+    return results;
+  }
+
+  int dr = directions[direction].first; // forward directions
+  int dc = directions[direction].second;
+  int pr = -dc; // parallel directions
+  int pc = dr;
+  int row = r.row + dr; // set ahead for loop
   int col = r.col + dc;
 
-  // scan outward in selected direction
   while (inBounds(row, col)) {
-    RobotState *other = getRobotAt(row, col);
+    for (int spread = -1; spread <= 1; spread++) { // calc triple beam
+      int rr = row + pr * spread;
+      int cc = col + pc * spread;
+      if (!inBounds(rr, cc))
+        continue;
 
-    if (other && other->alive) {
-      RadarObj obj;
-      obj.m_row = row;
-      obj.m_col = col;
-      obj.m_type = 'R';
+      char cell = board[rr][cc];
 
+      if (cell == '.') { // skip object init if nothing there
+        continue;
+      }
+
+      RadarObj obj = RadarObj(cell, rr, cc);
       results.push_back(obj);
-    }
 
-    // step forward
+      if (cell == 'M') {
+        return results;
+      }
+    }
     row += dr;
     col += dc;
   }
 
   return results;
+}
+
+Arena::RobotState *Arena::getRobotAt(int r, int c) {
+  for (auto &rbt : robots) {
+    if (rbt.row == r && rbt.col == c) {
+      return &rbt; // return pointer to robot at location
+    }
+  }
+  return nullptr; // nothing there
+}
+
+void Arena::printState() {
+  // 1. build a fresh display grid from board
+  std::vector<std::vector<char>> display = board;
+
+  // 2. overlay robots
+  for (const auto &r : robots) {
+    if (r.alive) {
+      display[r.row][r.col] = 'R'; // alive robot
+    } else {
+      display[r.row][r.col] = 'X'; // dead robot
+    }
+  }
+
+  // 3. print column headers
+  std::cout << "\n   ";
+  for (int c = 0; c < cols; c++) {
+    std::cout << c % 10 << " ";
+  }
+  std::cout << "\n";
+
+  // 4. print rows
+  for (int r = 0; r < rows; r++) {
+    std::cout << std::setw(2) << r << " ";
+
+    for (int c = 0; c < cols; c++) {
+      std::cout << display[r][c] << " ";
+    }
+    std::cout << "\n";
+  }
+
+  // 5. optional robot status (VERY helpful for grading)
+  std::cout << "\n--- Robot Status ---\n";
+  for (const auto &r : robots) {
+    std::cout << r.name << " (" << r.row << "," << r.col << ") "
+              << (r.alive ? "ALIVE" : "DEAD") << " HP:" << r.robot->get_health()
+              << " ARM:" << r.robot->get_armor() << "\n";
+  }
+
+  std::cout << "--------------------\n\n";
 }
