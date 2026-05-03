@@ -147,7 +147,7 @@ void Arena::handleShoot(RobotState& shooter, int target_row, int target_col) {
         if (!target.alive) return;
         if (&target == &shooter) return;
 
-        int totalDamage = baseDamage - target.robot->get_armor(); // apply armor
+        int totalDamage = static_cast<int>(baseDamage - (target.robot->get_armor() * 0.1f)); // apply armor * 0.1
 
         target.robot->take_damage(totalDamage);
         target.robot->reduce_armor(1);
@@ -166,7 +166,9 @@ void Arena::handleShoot(RobotState& shooter, int target_row, int target_col) {
 
         if (dr <= 1 && dc <= 1) {
             RobotState* target = getRobotAt(target_row, target_col);
-            if (target) applyHit(*target, 30);
+            if (target) {
+              applyHit(*target, 30);
+            }
         }
     }
 
