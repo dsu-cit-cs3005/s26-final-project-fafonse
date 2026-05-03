@@ -7,7 +7,8 @@
 
 class Arena {
 public:
-  Arena(int r, int c);
+  Arena(int r, int c, int max_rounds, float sleep_interval,
+        int flamethrower_count, int pit_count, int mound_count);
 
   // robot management
   void addRobot(RobotBase *robot, const std::string &name);
@@ -30,6 +31,8 @@ private:
 
   int rows;
   int cols;
+  int max_rounds;
+  float sleep_interval;
 
   std::vector<RobotState> robots;
 

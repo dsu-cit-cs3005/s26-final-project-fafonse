@@ -15,6 +15,12 @@ namespace fs = std::filesystem;
 struct Config {
   int rows = 20;
   int cols = 20;
+  int max = 1000;
+  float sleep = 0.5f;
+  bool live = true;
+  int flamethrowers = 5;
+  int pits = 5;
+  int mounds = 5;
 };
 
 Config loadConfig(const std::string &file) {
@@ -29,9 +35,25 @@ Config loadConfig(const std::string &file) {
     std::getline(ss, key, ':');
     std::getline(ss, val);
 
+    // simple parsing helper vibe (no trimming for now)
+    std::stringstream v(val);
+
     if (key == "Arena_Size") {
-      std::stringstream v(val);
       v >> cfg.rows >> cfg.cols;
+    } else if (key == "Max") {
+      v >> cfg.max;
+    } else if (key == "Sleep") {
+      v >> cfg.sleep;
+    } else if (key == "Live") {
+      int tmp;
+      v >> tmp;
+      cfg.live = (tmp != 0);
+    } else if (key == "Flamethrowers") {
+      v >> cfg.flamethrowers;
+    } else if (key == "Pits") {
+      v >> cfg.pits;
+    } else if (key == "Mounds") {
+      v >> cfg.mounds;
     }
   }
 
@@ -48,7 +70,8 @@ int main(int argc, char **argv) {
 
   Config cfg = loadConfig(argv[1]);
 
-  Arena arena(cfg.rows, cfg.cols);
+  Arena arena(cfg.rows, cfg.cols, cfg.max, cfg.sleep, cfg.flamethrowers,
+              cfg.pits, cfg.mounds);
 
   std::vector<void *> handles;
 

@@ -5,10 +5,21 @@
 #include <iomanip>
 #include <iostream>
 
-Arena::Arena(int r, int c)
-    : rows(r), cols(c),
+Arena::Arena(int r, int c, int max_rounds, float sleep_interval,
+             int flamethrower_count, int pit_count, int mound_count)
+    : rows(r), cols(c), max_rounds(max_rounds), sleep_interval(sleep_interval),
       board(rows, std::vector<char>(cols, '.')) // fill with '.'
-{}
+{
+  for (int i = 0; i < flamethrower_count; ++i) {
+    board[rand() % rows][rand() % cols] = 'F';
+  }
+  for (int i = 0; i < pit_count; ++i) {
+    board[rand() % rows][rand() % cols] = 'P';
+  }
+  for (int i = 0; i < mound_count; ++i) {
+    board[rand() % rows][rand() % cols] = 'M';
+  }
+}
 
 void Arena::addRobot(RobotBase *robot, const std::string &name) {
   RobotState rbt;
@@ -427,4 +438,8 @@ void Arena::printState() {
   }
 
   std::cout << "--------------------\n\n";
+}
+
+bool Arena::inBounds(int r, int c) const {
+  return (r > rows || r < 0 || c > cols || c < 0);
 }
