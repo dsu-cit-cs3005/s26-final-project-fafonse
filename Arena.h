@@ -48,5 +48,6 @@ private:
   // helpers
   bool inBounds(int r, int c) const;
   RobotState *getRobotAt(int r, int c);
+  void applyHit(RobotState *shooter, RobotState &target, int baseDamage);
   void printState();
 };

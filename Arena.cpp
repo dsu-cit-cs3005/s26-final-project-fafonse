@@ -1,9 +1,11 @@
 #include "Arena.h"
 #include "RadarObj.h"
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <thread>
 #include <unistd.h>
 
 Arena::Arena(int r, int c, int max_rounds, float sleep_interval,
@@ -82,8 +84,7 @@ void Arena::run() {
 
     // 🧹 Post-turn cleanup / status print
     printState();
-    usleep(static_cast<int>(
-        round(sleep_interval * 1000000))); // convert to microseconds
+    std::this_thread::sleep_for(std::chrono::duration<float>(sleep_interval));
     // 🏁 Check win condition AFTER full round
     if (aliveCount <= 1)
       break;
@@ -140,21 +141,15 @@ void Arena::processTurn(RobotState &r) {
   // --- 3. MOVE ---
   int move_dir = 0, move_dist = 0;
   r.robot->get_move_direction(move_dir, move_dist);
+  std::cout << move_dist;
 
   // Clamp movement to robot capability (prevents cheating / bugs)
-  int maxMove = r.robot->get_move_speed();
-  if (move_dist > maxMove) {
-    move_dist = maxMove;
-  }
 
   if (move_dist > 0) {
     std::cout << r.name << " moves (dir=" << move_dir << ", dist=" << move_dist
               << ")\n";
 
     handleMove(r, move_dir, move_dist);
-
-    // Update robot with new position AFTER movement
-    r.robot->move_to(r.row, r.col);
   } else {
     std::cout << r.name << " does nothing\n";
   }
@@ -162,24 +157,6 @@ void Arena::processTurn(RobotState &r) {
 
 void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
   WeaponType weapon = shooter.robot->get_weapon();
-
-  auto applyHit = [&](RobotState &target, int baseDamage) {
-    if (!target.alive)
-      return;
-    if (&target == &shooter)
-      return;
-
-    int totalDamage = static_cast<int>(
-        baseDamage *
-        (1.0f - (target.robot->get_armor() * 0.1f))); // apply armor * 0.1
-
-    target.robot->take_damage(totalDamage);
-    target.robot->reduce_armor(1);
-
-    std::cout << shooter.name << " hit " << target.name << "\n";
-
-    target.alive = (target.robot->get_health() > 0);
-  };
 
   // =========================
   // 🔨 HAMMER (adjacent only)
@@ -191,7 +168,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
     if (dr <= 1 && dc <= 1) {
       RobotState *target = getRobotAt(target_row, target_col);
       if (target) {
-        applyHit(*target, rand() % 11 + 50); // 50 - 60 dmg
+        applyHit(&shooter, *target, rand() % 11 + 50); // 50 - 60 dmg
       }
     }
   }
@@ -211,7 +188,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
     while (inBounds(r, c)) {
       RobotState *target = getRobotAt(r, c);
       if (target) {
-        applyHit(*target, rand() % 11 + 20); // 10 - 20 damage
+        applyHit(&shooter, *target, rand() % 11 + 20); // 10 - 20 damage
       }
       r += dr;
       c += dc;
@@ -237,7 +214,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
 
         RobotState *target = getRobotAt(r, c);
         if (target) {
-          applyHit(*target, rand() % 21 + 30); // 30 - 50 damage
+          applyHit(&shooter, *target, rand() % 21 + 30); // 30 - 50 damage
         }
       }
     }
@@ -262,7 +239,7 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
 
         RobotState *target = getRobotAt(r, c);
         if (target) {
-          applyHit(*target, rand() % 31 + 10); // 10 - 40 damage
+          applyHit(&shooter, *target, rand() % 31 + 10); // 10 - 40 damage
         }
       }
     }
@@ -270,23 +247,20 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
 }
 
 void Arena::handleMove(RobotState &r, int dir, int dist) {
-  static int dRow[9] = {0, -1, -1, 0, 1, 1, 1, 0, -1};
-  static int dCol[9] = {0, 0, 1, 1, 1, 0, -1, -1, -1};
-
   // 🚨 Respect move speed (IMPORTANT for grading)
   int maxMove = r.robot->get_move_speed();
   if (dist > maxMove)
     dist = maxMove;
 
-  // 🚨 Pit effect: cannot move
-  if (board[r.row][r.col] == 'P') {
-    r.robot->disable_movement(); // set move speed to 0
-    return;
-  }
-
   for (int i = 0; i < dist; i++) {
-    int newRow = r.row + dRow[dir];
-    int newCol = r.col + dCol[dir];
+    // 🚨 Pit effect: cannot move
+    if (board[r.row][r.col] == 'P') {
+      r.robot->disable_movement(); // set move speed to 0
+      break;                       // stop movement afterwards
+    }
+
+    int newRow = r.row + directions[dir].first;
+    int newCol = r.col + directions[dir].second;
 
     // 🧱 boundary check
     if (!inBounds(newRow, newCol))
@@ -304,9 +278,7 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
 
     // 🔥 Flamethrower obstacle damage
     if (cell == 'F') {
-      r.robot->take_damage(15);
-      r.robot->reduce_armor(1);
-
+      applyHit(nullptr, r, rand() % 21 + 30);
       std::cout << r.name << " hit flame obstacle!\n";
 
       if (r.robot->get_health() <= 0) {
@@ -314,7 +286,6 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
         return;
       }
     }
-
     // 🚶 move step
     r.row = newRow;
     r.col = newCol;
@@ -322,6 +293,7 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
     // 🔄 sync with RobotBase (IMPORTANT)
     r.robot->move_to(r.row, r.col);
   }
+  return;
 }
 
 std::vector<RadarObj> Arena::performRadar(RobotState &r, int direction) {
@@ -442,5 +414,29 @@ void Arena::printState() {
 }
 
 bool Arena::inBounds(int r, int c) const {
-  return (r > rows || r < 0 || c > cols || c < 0);
+  return (r >= 0 && r < rows && c >= 0 && c < cols);
 }
+
+void Arena::applyHit(RobotState *shooter, RobotState &target, int baseDamage) {
+  if (!target.alive)
+    return;
+
+  std::string name;
+  if (shooter == nullptr)
+    name = "Flame Trap";
+  else
+    name = shooter->name;
+  if (&target == shooter)
+    return;
+
+  int totalDamage = static_cast<int>(
+      baseDamage *
+      (1.0f - (target.robot->get_armor() * 0.1f))); // apply armor * 0.1
+
+  target.robot->take_damage(totalDamage);
+  target.robot->reduce_armor(1);
+
+  std::cout << name << " hit " << target.name << "\n";
+
+  target.alive = (target.robot->get_health() > 0);
+};

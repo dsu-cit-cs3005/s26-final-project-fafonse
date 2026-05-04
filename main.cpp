@@ -16,7 +16,7 @@ struct Config {
   int rows = 20;
   int cols = 20;
   int max = 1000;
-  float sleep = 0.5f;
+  float sleep = 2.0f;
   bool live = true;
   int flamethrowers = 5;
   int pits = 5;
@@ -40,14 +40,14 @@ Config loadConfig(const std::string &file) {
 
     if (key == "Arena_Size") {
       v >> cfg.rows >> cfg.cols;
-    } else if (key == "Max") {
+    } else if (key == "Max_Rounds") {
       v >> cfg.max;
-    } else if (key == "Sleep") {
+    } else if (key == "Sleep_interval") {
       v >> cfg.sleep;
-    } else if (key == "Live") {
-      int tmp;
+    } else if (key == "Game_State_Live") {
+      std::string tmp;
       v >> tmp;
-      cfg.live = (tmp != 0);
+      cfg.live = (tmp == "true");
     } else if (key == "Flamethrowers") {
       v >> cfg.flamethrowers;
     } else if (key == "Pits") {
