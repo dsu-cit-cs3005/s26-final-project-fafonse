@@ -29,15 +29,6 @@ test_robot: test_robot.cpp RobotBase.o
 RobotWarz: main.cpp Arena.o RobotBase.o
 	$(CXX) $(CXXFLAGS) main.cpp Arena.o RobotBase.o -ldl -o RobotWarz
 
-# =========================
-# Robot plugins (.so)
-# =========================
-
-robots: RatBoy.so
-
-RatBoy.so: Robot_Ratboy.cpp RobotBase.o
-	@echo "Building RatBoy.so"
-	$(CXX) $(CXXFLAGS) -shared Robot_Ratboy.cpp RobotBase.o -o RatBoy.so
 
 # =========================
 # Cleanup

@@ -81,7 +81,8 @@ int main(int argc, char **argv) {
   std::vector<std::string> robotFiles;
 
   for (auto &entry : fs::directory_iterator("robots")) {
-    if (entry.path().extension() == ".cpp") {
+    if (entry.path().extension() == ".cpp" &&
+        entry.path().filename().string().rfind("Robot_", 0) == 0) {
       robotFiles.push_back(entry.path().string());
     }
   }
@@ -91,7 +92,7 @@ int main(int argc, char **argv) {
   // ==============================
   for (auto &filename : robotFiles) {
     std::string baseName = fs::path(filename).stem().string();
-    std::string sharedLib = "robots/" + baseName + ".so";
+    std::string sharedLib = "./robots/" + baseName + ".so";
 
     // compile
     std::string compileCmd = "g++ -shared -fPIC -o " + sharedLib + " " +
@@ -115,6 +116,7 @@ int main(int argc, char **argv) {
     handles.push_back(handle);
 
     // find factory function
+    dlerror();
     RobotFactory create_robot = (RobotFactory)dlsym(handle, "create_robot");
 
     if (!create_robot) {
