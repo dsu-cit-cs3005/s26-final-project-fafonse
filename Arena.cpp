@@ -8,6 +8,15 @@
 #include <thread>
 #include <unistd.h>
 
+// ANSI colors
+#define RESET "\033[0m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define CYAN "\033[36m"
+#define BOLD "\033[1m"
+#define BRIGHT "\033[1;37m"
+
 Arena::Arena(int r, int c, int max_rounds, float sleep_interval,
              int flamethrower_count, int pit_count, int mound_count)
     : rows(r), cols(c), max_rounds(max_rounds), sleep_interval(sleep_interval),
@@ -84,6 +93,10 @@ void Arena::run() {
 
     // 🧹 Post-turn cleanup / status print
     printState();
+    for (auto &r : robots) {
+      if (r.flash_timer > 0)
+        r.flash_timer--;
+    }
     std::this_thread::sleep_for(std::chrono::duration<float>(sleep_interval));
     // 🏁 Check win condition AFTER full round
     if (aliveCount <= 1)
@@ -141,7 +154,6 @@ void Arena::processTurn(RobotState &r) {
   // --- 3. MOVE ---
   int move_dir = 0, move_dist = 0;
   r.robot->get_move_direction(move_dir, move_dist);
-  std::cout << move_dist;
 
   // Clamp movement to robot capability (prevents cheating / bugs)
 
@@ -300,57 +312,47 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
 std::vector<RadarObj> Arena::performRadar(RobotState &r, int direction) {
   std::vector<RadarObj> results;
 
-  // Lambda to handle scanning a single cell
-  auto scanCell = [&](int rr, int cc) -> bool {
+  auto scanCell = [&](int rr, int cc) {
     if (!inBounds(rr, cc))
-      return false;
+      return;
 
-    // Check for robot first (consistent across modes)
+    // robots first (alive + dead included as required)
     RobotState *other = getRobotAt(rr, cc);
     if (other && other != &r) {
-      RadarObj other_robot;
-      other_robot.m_row = rr;
-      other_robot.m_col = cc;
-
-      if (other->alive) // specify dead or alive
-        other_robot.m_type = 'R';
-      else
-        other_robot.m_type = 'X';
-      results.push_back(other_robot);
-      return false; // keep scanning
+      char type = other->alive ? 'R' : 'X';
+      results.emplace_back(type, rr, cc);
+      return;
     }
 
+    // terrain / objects (NO blocking assumed unless specified)
     char cell = board[rr][cc];
-    if (cell == '.')
-      return false;
-
-    results.push_back(RadarObj(cell, rr, cc));
-
-    // Stop scan if mound
-    return (cell == 'M');
+    if (cell != '.') {
+      results.emplace_back(cell, rr, cc);
+    }
   };
 
-  if (direction == 0) { // nearby scan
+  // =========================
+  // NEARBY SCAN
+  // =========================
+  if (direction == 0) {
     for (int dr = -1; dr <= 1; dr++) {
       for (int dc = -1; dc <= 1; dc++) {
         if (dr == 0 && dc == 0)
           continue;
 
-        int rr = r.row + dr;
-        int cc = r.col + dc;
-
-        if (scanCell(rr, cc)) {
-          return results; // early exit on mound
-        }
+        scanCell(r.row + dr, r.col + dc);
       }
     }
     return results;
   }
 
-  // Beam scan
+  // =========================
+  // BEAM SCAN
+  // =========================
   int dr = directions[direction].first;
   int dc = directions[direction].second;
-  int pr = -dc; // perpendicular
+
+  int pr = -dc;
   int pc = dr;
 
   int row = r.row + dr;
@@ -358,12 +360,7 @@ std::vector<RadarObj> Arena::performRadar(RobotState &r, int direction) {
 
   while (inBounds(row, col)) {
     for (int spread = -1; spread <= 1; spread++) {
-      int rr = row + pr * spread;
-      int cc = col + pc * spread;
-
-      if (scanCell(rr, cc)) {
-        return results; // early exit on mound
-      }
+      scanCell(row + pr * spread, col + pc * spread);
     }
 
     row += dr;
@@ -383,44 +380,75 @@ Arena::RobotState *Arena::getRobotAt(int r, int c) {
 }
 
 void Arena::printState() {
-  // 1. build a fresh display grid from board
+  // 1. copy board
   std::vector<std::vector<char>> display = board;
 
-  // 2. overlay robots
-  for (const auto &r : robots) {
-    if (r.alive) {
-      display[r.row][r.col] = 'R'; // alive robot
-    } else {
-      display[r.row][r.col] = 'X'; // dead robot
-    }
-  }
+  // helper lambda: assign robot symbols
+  auto getRobotSymbol = [&](const RobotState &r, int index) {
+    static const char symbols[] = {'@', '#', '$', '!', '%', '&', '*', '+'};
 
-  // 3. print column headers
-  std::cout << "\n   ";
+    if (!r.alive)
+      return 'X';
+    return symbols[index % 8];
+  };
+
+  // 4. column headers (clean alignment)
+  std::cout << "     ";
   for (int c = 0; c < cols; c++) {
-    std::cout << c % 10 << " ";
+    std::cout << std::setw(2) << c << " ";
   }
   std::cout << "\n";
 
-  // 4. print rows
+  // 2. overlay robots with unique symbols
   for (int r = 0; r < rows; r++) {
-    std::cout << std::setw(2) << r << " ";
+    std::cout << std::setw(2) << r << "  ";
 
     for (int c = 0; c < cols; c++) {
-      std::cout << display[r][c] << " ";
+
+      bool printed_robot = false;
+
+      for (size_t i = 0; i < robots.size(); i++) {
+        auto &rb = robots[i];
+
+        if (rb.row == r && rb.col == c) {
+
+          char symbol = getRobotSymbol(rb, i);
+
+          if (!rb.alive) {
+            std::cout << RED << " X " << RESET;
+          } else if (rb.flash_timer > 0) {
+            std::cout << YELLOW << BOLD << " " << symbol << " " << RESET;
+          } else {
+            std::cout << GREEN << " " << symbol << " " << RESET;
+          }
+
+          printed_robot = true;
+          break;
+        }
+      }
+
+      if (!printed_robot) {
+        std::cout << " " << board[r][c] << " ";
+      }
     }
+
     std::cout << "\n";
   }
+  // 3. round header style
+  static int round = 0;
+  std::cout << "\n========= starting round " << round++ << " =========\n\n";
 
-  // 5. optional robot status (VERY helpful for grading)
+  // 5. status panel (slightly cleaner)
   std::cout << "\n--- Robot Status ---\n";
-  for (const auto &r : robots) {
+  for (size_t i = 0; i < robots.size(); i++) {
+    const auto &r = robots[i];
+
     std::cout << r.name << " (" << r.row << "," << r.col << ") "
               << (r.alive ? "ALIVE" : "DEAD") << " HP:" << r.robot->get_health()
               << " ARM:" << r.robot->get_armor() << "\n";
   }
 
-  std::cout << "--------------------\n\n";
+  std::cout << "---------------------\n";
 }
 
 bool Arena::inBounds(int r, int c) const {
@@ -448,6 +476,7 @@ void Arena::applyHit(RobotState *shooter, RobotState &target, int baseDamage) {
   target.robot->reduce_armor(1);
 
   std::cout << name << " hit " << target.name << "\n";
+  target.flash_timer = 2;
 
   target.alive = (target.robot->get_health() > 0);
 };

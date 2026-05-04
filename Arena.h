@@ -27,6 +27,7 @@ private:
     WeaponType weapon;
     bool alive;
     std::string name;
+    int flash_timer = 0;
   };
 
   int rows;
