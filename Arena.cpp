@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <unistd.h>
 
 Arena::Arena(int r, int c, int max_rounds, float sleep_interval,
              int flamethrower_count, int pit_count, int mound_count)
@@ -61,7 +62,6 @@ void Arena::addRobot(RobotBase *robot, const std::string &name) {
 
 void Arena::run() {
   int turn = 0;
-  const int MAX_TURNS = 1000; // safety to prevent infinite loops
 
   while (true) {
     std::cout << "========== Turn " << turn << " ==========\n";
@@ -82,7 +82,8 @@ void Arena::run() {
 
     // 🧹 Post-turn cleanup / status print
     printState();
-
+    usleep(static_cast<int>(
+        round(sleep_interval * 1000000))); // convert to microseconds
     // 🏁 Check win condition AFTER full round
     if (aliveCount <= 1)
       break;
@@ -90,7 +91,7 @@ void Arena::run() {
     turn++;
 
     // 🛑 Hard safety stop (prevents grading penalties)
-    if (turn >= MAX_TURNS) {
+    if (turn >= max_rounds) {
       std::cout << "Max turns reached. Ending game.\n";
       break;
     }
