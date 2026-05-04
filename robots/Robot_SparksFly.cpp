@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-class Robot_FlamethrowerZigZag : public RobotBase {
+class Robot_SparksFly : public RobotBase {
 private:
   int target_row = -1;
   int target_col = -1;
@@ -86,7 +86,7 @@ private:
   }
 
 public:
-  Robot_FlamethrowerZigZag() : RobotBase(2, 5, flamethrower) {}
+  Robot_SparksFly() : RobotBase(2, 5, flamethrower) {}
 
   // =========================
   // RADAR
@@ -410,7 +410,7 @@ public:
 // =========================
 // FACTORY
 // =========================
-extern "C" RobotBase *create_robot() { return new Robot_FlamethrowerZigZag(); }
+extern "C" RobotBase *create_robot() { return new Robot_SparksFly(); }
 
 extern "C" const char *robot_summary() {
   return "Improved hammer bot with A*, obstacle avoidance, anti-stuck logic, "
