@@ -130,11 +130,11 @@ void Arena::processTurn(RobotState &r) {
 
   // --- 2. SHOOT ---
   int shot_row = -1, shot_col = -1;
-  if (r.robot->get_shot_location(shot_row, shot_col)) {
+  if (r.robot->get_shot_location(shot_row, shot_col) == true) {
+    handleShoot(r, shot_row, shot_col);
     std::cout << r.name << " shoots at (" << shot_row << "," << shot_col
               << ")\n";
 
-    handleShoot(r, shot_row, shot_col);
     return; // 🚨 MUST stop here (one action rule)
   }
 
@@ -168,7 +168,8 @@ void Arena::handleShoot(RobotState &shooter, int target_row, int target_col) {
     if (dr <= 1 && dc <= 1) {
       RobotState *target = getRobotAt(target_row, target_col);
       if (target) {
-        applyHit(&shooter, *target, rand() % 11 + 50); // 50 - 60 dmg
+        // applyHit(&shooter, *target, rand() % 11 + 50); // 50 - 60 dmg
+        applyHit(&shooter, *target, 100);
       }
     }
   }
@@ -299,63 +300,72 @@ void Arena::handleMove(RobotState &r, int dir, int dist) {
 std::vector<RadarObj> Arena::performRadar(RobotState &r, int direction) {
   std::vector<RadarObj> results;
 
+  // Lambda to handle scanning a single cell
+  auto scanCell = [&](int rr, int cc) -> bool {
+    if (!inBounds(rr, cc))
+      return false;
+
+    // Check for robot first (consistent across modes)
+    RobotState *other = getRobotAt(rr, cc);
+    if (other && other != &r) {
+      RadarObj other_robot;
+      other_robot.m_row = rr;
+      other_robot.m_col = cc;
+
+      if (other->alive) // specify dead or alive
+        other_robot.m_type = 'R';
+      else
+        other_robot.m_type = 'X';
+      results.push_back(other_robot);
+      return false; // keep scanning
+    }
+
+    char cell = board[rr][cc];
+    if (cell == '.')
+      return false;
+
+    results.push_back(RadarObj(cell, rr, cc));
+
+    // Stop scan if mound
+    return (cell == 'M');
+  };
+
   if (direction == 0) { // nearby scan
     for (int dr = -1; dr <= 1; dr++) {
       for (int dc = -1; dc <= 1; dc++) {
-        if (dr == 0 && dc == 0) // skip self
+        if (dr == 0 && dc == 0)
           continue;
 
         int rr = r.row + dr;
         int cc = r.col + dc;
 
-        if (!inBounds(rr, cc))
-          continue;
-
-        // detect object same as above
-        char cell = board[rr][cc];
-
-        if (cell == '.') { // skip object init if nothing there
-          continue;
-        }
-
-        RadarObj obj = RadarObj(cell, rr, cc);
-        results.push_back(obj);
-
-        if (cell == 'M') { // return radar early if a mound
-          return results;
+        if (scanCell(rr, cc)) {
+          return results; // early exit on mound
         }
       }
     }
     return results;
   }
 
-  int dr = directions[direction].first; // forward directions
+  // Beam scan
+  int dr = directions[direction].first;
   int dc = directions[direction].second;
-  int pr = -dc; // parallel directions
+  int pr = -dc; // perpendicular
   int pc = dr;
-  int row = r.row + dr; // set ahead for loop
+
+  int row = r.row + dr;
   int col = r.col + dc;
 
   while (inBounds(row, col)) {
-    for (int spread = -1; spread <= 1; spread++) { // calc triple beam
+    for (int spread = -1; spread <= 1; spread++) {
       int rr = row + pr * spread;
       int cc = col + pc * spread;
-      if (!inBounds(rr, cc))
-        continue;
 
-      char cell = board[rr][cc];
-
-      if (cell == '.') { // skip object init if nothing there
-        continue;
-      }
-
-      RadarObj obj = RadarObj(cell, rr, cc);
-      results.push_back(obj);
-
-      if (cell == 'M') {
-        return results;
+      if (scanCell(rr, cc)) {
+        return results; // early exit on mound
       }
     }
+
     row += dr;
     col += dc;
   }
@@ -423,15 +433,16 @@ void Arena::applyHit(RobotState *shooter, RobotState &target, int baseDamage) {
 
   std::string name;
   if (shooter == nullptr)
-    name = "Flame Trap";
+    name = "Flame Trap"; // default bro
   else
     name = shooter->name;
   if (&target == shooter)
     return;
 
-  int totalDamage = static_cast<int>(
-      baseDamage *
-      (1.0f - (target.robot->get_armor() * 0.1f))); // apply armor * 0.1
+  float reduction = target.robot->get_armor() * 01.f;
+  if (reduction > 0.9f)
+    reduction = 0.9f; // clamp reduction to 90% max
+  int totalDamage = static_cast<int>(baseDamage * (1.0f - reduction));
 
   target.robot->take_damage(totalDamage);
   target.robot->reduce_armor(1);
